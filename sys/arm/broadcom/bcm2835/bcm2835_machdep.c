@@ -101,6 +101,14 @@ bcm2835_devmap_init(platform_t plat)
 	return (0);
 }
 
+static int
+bcm2836_devmap_init(platform_t plat)
+{
+
+	arm_devmap_add_entry(0x3f000000, 0x01000000);
+	return (0);
+}
+
 struct arm32_dma_range *
 bus_dma_get_range(void)
 {
@@ -121,6 +129,7 @@ cpu_reset()
 	bcmwd_watchdog_reset();
 	while (1);
 }
+
 static platform_method_t bcm2835_methods[] = {
 	PLATFORMMETHOD(platform_devmap_init,	bcm2835_devmap_init),
 	PLATFORMMETHOD(platform_lastaddr,	bcm2835_lastaddr),
@@ -129,5 +138,14 @@ static platform_method_t bcm2835_methods[] = {
 	PLATFORMMETHOD_END,
 };
 
+static platform_method_t bcm2836_methods[] = {
+	PLATFORMMETHOD(platform_devmap_init,	bcm2836_devmap_init),
+	PLATFORMMETHOD(platform_lastaddr,	bcm2835_lastaddr),
+	PLATFORMMETHOD(platform_late_init,	bcm2835_late_init),
+
+	PLATFORMMETHOD_END,
+};
+
 FDT_PLATFORM_DEF(bcm2835, "bcm2835", 0, "raspberrypi,model-b");
+FDT_PLATFORM_DEF(bcm2836, "bcm2836", 0, "brcm,bcm2709");
 

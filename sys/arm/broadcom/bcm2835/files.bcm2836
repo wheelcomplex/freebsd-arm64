@@ -1,0 +1,4 @@
+# $FreeBSD$
+
+arm/arm/cpufunc_asm_armv7.S			standard
+arm/arm/generic_timer.c				standard
