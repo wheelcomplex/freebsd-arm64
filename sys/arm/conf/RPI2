@@ -81,7 +81,7 @@ options 	INVARIANT_SUPPORT	# Extra sanity checks of internal structures, require
 #options 	BOOTP_NFSV3
 #options 	BOOTP_WIRED_TO=ue0
 
-#options 	ROOTDEVNAME=\"ufs:mmcsd0s2\"
+options 	ROOTDEVNAME=\"ufs:mmcsd0s2\"
 
 device		bpf
 device		loop
