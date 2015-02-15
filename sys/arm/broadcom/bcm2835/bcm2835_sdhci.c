@@ -68,7 +68,7 @@ __FBSDID("$FreeBSD$");
 #endif
 
 static int bcm2835_sdhci_hs = 1;
-static int bcm2835_sdhci_pio_mode = 0;
+static int bcm2835_sdhci_pio_mode = 1;
 
 TUNABLE_INT("hw.bcm2835.sdhci.hs", &bcm2835_sdhci_hs);
 TUNABLE_INT("hw.bcm2835.sdhci.pio_mode", &bcm2835_sdhci_pio_mode);
