@@ -53,22 +53,17 @@ struct netif_driver *netif_drivers[] = {
 	NULL
 };
 
-extern struct file_format amd64_elf;
-extern struct file_format amd64_elf_obj;
-
-struct file_format *file_formats[] = {
-	&amd64_elf,
-	&amd64_elf_obj,
-	NULL
-};
-
 extern struct console efi_console;
+#if defined(__i386__) || defined(__amd64__)
 extern struct console comconsole;
 extern struct console nullconsole;
+#endif
 
 struct console *consoles[] = {
 	&efi_console,
+#if defined(__i386__) || defined(__amd64__)
 	&comconsole,
 	&nullconsole,
+#endif
 	NULL
 };

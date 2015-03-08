@@ -1,7 +1,9 @@
 /*-
- * Copyright (c) 2003 Peter Wemm <peter@FreeBSD.org>
+ * Copyright (c) 2013 The FreeBSD Foundation
  * All rights reserved.
  *
+ * This software was developed by Benno Rice under sponsorship from
+ * the FreeBSD Foundation.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
@@ -14,7 +16,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
@@ -26,17 +28,26 @@
  * $FreeBSD$
  */
 
-#ifndef _MACHINE_METADATA_H_
-#define	_MACHINE_METADATA_H_
+#ifndef	_LOADER_EFI_COPY_H_
+#define	_LOADER_EFI_COPY_H_
 
-#define	MODINFOMD_BOOTINFO	0x1001
-#define	MODINFOMD_DTBP		0x1002
-#define	MODINFOMD_EFI_MAP	0x1003
+int	efi_autoload(void);
 
-struct efi_map_header {
-	size_t		memory_size;
-	size_t		descriptor_size;
-	uint32_t	descriptor_version;
-};
+int	efi_getdev(void **vdev, const char *devspec, const char **path);
+char	*efi_fmtdev(void *vdev);
+int	efi_setcurrdev(struct env_var *ev, int flags, const void *value);
 
-#endif /* !_MACHINE_METADATA_H_ */
+int	efi_copy_init(void);
+
+ssize_t	efi_copyin(const void *src, vm_offset_t dest, const size_t len);
+ssize_t	efi_copyout(const vm_offset_t src, void *dest, const size_t len);
+ssize_t	efi_readin(const int fd, vm_offset_t dest, const size_t len);
+void * efi_translate(vm_offset_t ptr);
+
+extern UINTN efi_mapkey;
+
+#if defined(__i386__) || defined(__amd64__)
+void	efi_copy_finish(void);
+#endif
+
+#endif	/* _LOADER_EFI_COPY_H_ */

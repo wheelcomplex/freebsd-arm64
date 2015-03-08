@@ -4,9 +4,6 @@ MAN=
 
 .include <src.opts.mk>
 
-# In-tree GCC does not support __attribute__((ms_abi)).
-.if ${COMPILER_TYPE} != "gcc"
-
 MK_SSP=		no
 
 PROG=		loader.sym
@@ -14,32 +11,28 @@ INTERNALPROG=
 
 .PATH: ${.CURDIR}/../../efi/loader
 # architecture-specific loader code
-SRCS=	autoload.c \
+SRCS=	start.S \
+	autoload.c \
 	bootinfo.c \
 	conf.c \
 	copy.c \
 	devicename.c \
-	elf64_freebsd.c \
-	framebuffer.c \
+	exec.c \
 	main.c \
 	reloc.c \
 	vers.c
-SRCS+=	amd64_tramp.S \
-	start.S
-.PATH:	${.CURDIR}/../../i386/libi386
-SRCS+=	nullconsole.c \
-	comconsole.c
 
-CFLAGS+=	-fPIC
-CFLAGS+=	-I${.CURDIR}
+#	elf64_freebsd.c \
+	framebuffer.c \
+	reloc.c \
+
+CFLAGS+=	-ffreestanding -fno-builtin -msoft-float
+#CFLAGS+=	-fPIC
 CFLAGS+=	-I${.CURDIR}/../../efi/loader
 CFLAGS+=	-I${.CURDIR}/../../efi/include
 CFLAGS+=	-I${.CURDIR}/../../efi/include/${MACHINE_CPUARCH}
 CFLAGS+=	-I${.CURDIR}/../../../contrib/dev/acpica/include
 CFLAGS+=	-I${.CURDIR}/../../..
-CFLAGS+=	-DNO_PCI
-# Allow the framebuffer to be used
-CFLAGS+=	-DEFI_FB
 
 .if ${MK_FORTH} != "no"
 BOOT_FORTH=	yes
@@ -48,12 +41,12 @@ CFLAGS+=	-I${.CURDIR}/../../ficl
 CFLAGS+=	-I${.CURDIR}/../../ficl/${MACHINE_CPUARCH}
 LIBFICL=	${.OBJDIR}/../../ficl/libficl.a
 .endif
-
-# Include bcache code.
-HAVE_BCACHE=    yes
-
-.if defined(EFI_STAGING_SIZE)
-CFLAGS+=	-DEFI_STAGING_SIZE=${EFI_STAGING_SIZE}
+.if ${MK_FDT} != "no"
+CFLAGS+=	-I${.CURDIR}/../../fdt
+CFLAGS+=	-I${.OBJDIR}/../../fdt
+CFLAGS+=	-DLOADER_FDT_SUPPORT
+LIBEFI_FDT=	${.OBJDIR}/../../efi/fdt/libefi_fdt.a
+LIBFDT=		${.OBJDIR}/../../fdt/libfdt.a
 .endif
 
 # Always add MI sources 
@@ -65,7 +58,13 @@ FILES=	loader.efi
 FILESMODE_loader.efi=	${BINMODE}
 
 LDSCRIPT=	${.CURDIR}/ldscript.${MACHINE_CPUARCH}
-LDFLAGS=	-Wl,-T${LDSCRIPT} -Wl,-Bsymbolic -shared -Wl,-znocombreloc
+LDFLAGS=	-Wl,-T${LDSCRIPT}
+LDFLAGS+=	-Wl,-Bsymbolic
+LDFLAGS+=	-shared
+#LDFLAGS+=	-static
+LDFLAGS+=	-nostdlib
+
+${PROG}:	${LDSCRIPT}
 
 CLEANFILES=	vers.c loader.efi
 
@@ -74,40 +73,23 @@ NEWVERSWHAT=	"EFI loader" ${MACHINE_CPUARCH}
 vers.c:	${.CURDIR}/../../common/newvers.sh ${.CURDIR}/../../efi/loader/version
 	sh ${.CURDIR}/../../common/newvers.sh ${.CURDIR}/version ${NEWVERSWHAT}
 
-OBJCOPY?=	objcopy
+OBJCOPY=	objcopy
 OBJDUMP?=	objdump
-
-.if ${MACHINE_CPUARCH} == "amd64"
-EFI_TARGET=	efi-app-x86_64
-.else
-EFI_TARGET=	efi-app-ia32
-.endif
 
 loader.efi: loader.sym
 	if [ `${OBJDUMP} -t ${.ALLSRC} | fgrep '*UND*' | wc -l` != 0 ]; then \
 		${OBJDUMP} -t ${.ALLSRC} | fgrep '*UND*'; \
 		exit 1; \
 	fi
-	${OBJCOPY} -j .text -j .sdata -j .data \
-		-j .dynamic -j .dynsym -j .rel.dyn \
-		-j .rela.dyn -j .reloc -j .eh_frame -j set_Xcommand_set \
-		--output-target=${EFI_TARGET} ${.ALLSRC} ${.TARGET}
+	${OBJCOPY} -j .data -j .dynamic -j .dynstr -j .dynsym -j .hash \
+	    -j .rel.dyn -j .reloc -j .sdata -j .text -j set_Xcommand_set \
+	    -j .sbss -j .bss -O binary ${.ALLSRC} ${.TARGET}
 
 LIBEFI=		${.OBJDIR}/../../efi/libefi/libefi.a
+LIBSTAND=       ${.OBJDIR}/../../../../lib/libstand/libstand.a
 
-DPADD=		${LIBFICL} ${LIBEFI} ${LIBSTAND} ${LDSCRIPT}
-LDADD=		${LIBFICL} ${LIBEFI} ${LIBSTAND}
-
-.endif # ${COMPILER_TYPE} != "gcc"
+DPADD=		${LIBFICL} ${LIBEFI} ${LIBFDT} ${LIBEFI_FDT} ${LIBSTAND}
+LDADD=		${LIBFICL} ${LIBEFI} ${LIBFDT} ${LIBEFI_FDT} ${LIBSTAND}
 
 .include <bsd.prog.mk>
 
-beforedepend ${OBJS}: machine x86
-
-CLEANFILES+=   machine x86
-
-machine:
-	ln -sf ${.CURDIR}/../../../amd64/include machine
-
-x86:
-	ln -sf ${.CURDIR}/../../../x86/include x86

@@ -36,18 +36,26 @@ __FBSDID("$FreeBSD$");
 #include <sys/linker.h>
 #include <sys/boot.h>
 #include <machine/cpufunc.h>
+#include <machine/elf.h>
 #include <machine/metadata.h>
 #include <machine/psl.h>
-#include <machine/specialreg.h>
 
 #include <efi.h>
 #include <efilib.h>
 
 #include "bootstrap.h"
-#include "framebuffer.h"
-#include "x86_efi.h"
+#include "loader_efi.h"
 
-UINTN x86_efi_mapkey;
+#if defined(__i386__) || defined(__amd64__)
+#include <machine/specialreg.h>
+#include "framebuffer.h"
+#endif
+
+#if defined(LOADER_FDT_SUPPORT)
+#include <fdt_platform.h>
+#endif
+
+UINTN efi_mapkey;
 
 static const char howto_switches[] = "aCdrgDmphsv";
 static int howto_masks[] = {
@@ -211,6 +219,9 @@ bi_copymodules(vm_offset_t addr)
 		if (fp->f_args)
 			MOD_ARGS(addr, fp->f_args, c);
 		v = fp->f_addr;
+#if defined(__arm__)
+		v -= __elfN(relocation_offset);
+#endif
 		MOD_ADDR(addr, v, c);
 		v = fp->f_size;
 		MOD_SIZE(addr, v, c);
@@ -232,6 +243,7 @@ bi_load_efi_data(struct preloaded_file *kfp)
 	UINTN mmsz, pages, sz;
 	UINT32 mmver;
 	struct efi_map_header *efihdr;
+#ifdef EFI_FB
 	struct efi_fb efifb;
 
 	if (efi_find_framebuffer(&efifb) == 0) {
@@ -247,6 +259,7 @@ bi_load_efi_data(struct preloaded_file *kfp)
 
 		file_addmetadata(kfp, MODINFOMD_EFI_FB, sizeof(efifb), &efifb);
 	}
+#endif
 
 	efisz = (sizeof(struct efi_map_header) + 0xf) & ~0xf;
 
@@ -260,7 +273,7 @@ bi_load_efi_data(struct preloaded_file *kfp)
 	 * one is marked as being loader data.
 	 */
 	sz = 0;
-	BS->GetMemoryMap(&sz, NULL, &x86_efi_mapkey, &mmsz, &mmver);
+	BS->GetMemoryMap(&sz, NULL, &efi_mapkey, &mmsz, &mmver);
 	sz += mmsz;
 	sz = (sz + 0xf) & ~0xf;
 	pages = EFI_SIZE_TO_PAGES(sz + efisz);
@@ -280,7 +293,7 @@ bi_load_efi_data(struct preloaded_file *kfp)
 	efihdr = (struct efi_map_header *)addr;
 	mm = (void *)((uint8_t *)efihdr + efisz);
 	sz = (EFI_PAGE_SIZE * pages) - efisz;
-	status = BS->GetMemoryMap(&sz, mm, &x86_efi_mapkey, &mmsz, &mmver);
+	status = BS->GetMemoryMap(&sz, mm, &efi_mapkey, &mmsz, &mmver);
 	if (EFI_ERROR(status)) {
 		printf("%s: GetMemoryMap() returned 0x%lx\n", __func__,
 		    (long)status);
@@ -317,6 +330,25 @@ bi_load(char *args, vm_offset_t *modulep, vm_offset_t *kernendp)
 	vm_offset_t size;
 	char *rootdevname;
 	int howto;
+#if defined(LOADER_FDT_SUPPORT)
+	vm_offset_t dtbp;
+	int dtb_size;
+#endif
+#if defined(__arm__)
+	vm_offset_t vaddr;
+	int i;
+	/*
+	 * These metadata addreses must be converted for kernel after
+	 * relocation.
+	 */
+	uint32_t		mdt[] = {
+	    MODINFOMD_SSYM, MODINFOMD_ESYM, MODINFOMD_KERNEND,
+	    MODINFOMD_ENVP,
+#if defined(LOADER_FDT_SUPPORT)
+	    MODINFOMD_DTBP
+#endif
+	};
+#endif
 
 	howto = bi_getboothowto(args);
 
@@ -333,7 +365,7 @@ bi_load(char *args, vm_offset_t *modulep, vm_offset_t *kernendp)
 	}
 
 	/* Try reading the /etc/fstab file to select the root device */
-	getrootmount(x86_efi_fmtdev((void *)rootdev));
+	getrootmount(efi_fmtdev((void *)rootdev));
 
 	addr = 0;
 	for (xp = file_findfile(NULL, NULL); xp != NULL; xp = xp->f_next) {
@@ -351,6 +383,16 @@ bi_load(char *args, vm_offset_t *modulep, vm_offset_t *kernendp)
 	/* Pad to a page boundary. */
 	addr = roundup(addr, PAGE_SIZE);
 
+#if defined(LOADER_FDT_SUPPORT)
+	/* Handle device tree blob */
+	dtbp = addr;
+	dtb_size = fdt_copy(addr);
+		
+	/* Pad to a page boundary */
+	if (dtb_size)
+		addr += roundup(dtb_size, PAGE_SIZE);
+#endif
+
 	kfp = file_findfile(NULL, "elf kernel");
 	if (kfp == NULL)
 		kfp = file_findfile(NULL, "elf64 kernel");
@@ -359,6 +401,13 @@ bi_load(char *args, vm_offset_t *modulep, vm_offset_t *kernendp)
 	kernend = 0;	/* fill it in later */
 	file_addmetadata(kfp, MODINFOMD_HOWTO, sizeof howto, &howto);
 	file_addmetadata(kfp, MODINFOMD_ENVP, sizeof envp, &envp);
+#if defined(LOADER_FDT_SUPPORT)
+	if (dtb_size)
+		file_addmetadata(kfp, MODINFOMD_DTBP, sizeof dtbp, &dtbp);
+	else
+		pager_output("WARNING! Trying to fire up the kernel, but no "
+		    "device tree blob found!\n");
+#endif
 	file_addmetadata(kfp, MODINFOMD_KERNEND, sizeof kernend, &kernend);
 
 	bi_load_efi_data(kfp);
@@ -373,8 +422,24 @@ bi_load(char *args, vm_offset_t *modulep, vm_offset_t *kernendp)
 	md = file_findmetadata(kfp, MODINFOMD_KERNEND);
 	bcopy(&kernend, md->md_data, sizeof kernend);
 
+#if defined(__arm__)
+	*modulep -= __elfN(relocation_offset);
+
+	/* Do relocation fixup on metadata of each module. */
+	for (xp = file_findfile(NULL, NULL); xp != NULL; xp = xp->f_next) {
+		for (i = 0; i < sizeof mdt / sizeof mdt[0]; i++) {
+			md = file_findmetadata(xp, mdt[i]);
+			if (md) {
+				bcopy(md->md_data, &vaddr, sizeof vaddr);
+				vaddr -= __elfN(relocation_offset);
+				bcopy(&vaddr, md->md_data, sizeof vaddr);
+			}
+		}
+	}
+#endif
+
 	/* Copy module list and metadata. */
 	(void)bi_copymodules(addr);
-	
+
 	return (0);
 }

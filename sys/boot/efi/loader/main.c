@@ -36,7 +36,7 @@ __FBSDID("$FreeBSD$");
 #include <efilib.h>
 
 #include <bootstrap.h>
-#include "x86_efi.h"
+#include "loader_efi.h"
 
 extern char bootprog_name[];
 extern char bootprog_rev[];
@@ -73,7 +73,7 @@ main(int argc, CHAR16 *argv[])
 	 */
 	cons_probe();
 
-	if (x86_efi_copy_init()) {
+	if (efi_copy_init()) {
 		printf("failed to allocate staging area\n");
 		return (EFI_BUFFER_TOO_SMALL);
 	}
@@ -115,18 +115,18 @@ main(int argc, CHAR16 *argv[])
 	 */
 	BS->SetWatchdogTimer(0, 0, 0, NULL);
 
-	env_setenv("currdev", EV_VOLATILE, x86_efi_fmtdev(&currdev),
-	    x86_efi_setcurrdev, env_nounset);
-	env_setenv("loaddev", EV_VOLATILE, x86_efi_fmtdev(&currdev), env_noset,
+	env_setenv("currdev", EV_VOLATILE, efi_fmtdev(&currdev),
+	    efi_setcurrdev, env_nounset);
+	env_setenv("loaddev", EV_VOLATILE, efi_fmtdev(&currdev), env_noset,
 	    env_nounset);
 
 	setenv("LINES", "24", 1);	/* optional */
 
-	archsw.arch_autoload = x86_efi_autoload;
-	archsw.arch_getdev = x86_efi_getdev;
-	archsw.arch_copyin = x86_efi_copyin;
-	archsw.arch_copyout = x86_efi_copyout;
-	archsw.arch_readin = x86_efi_readin;
+	archsw.arch_autoload = efi_autoload;
+	archsw.arch_getdev = efi_getdev;
+	archsw.arch_copyin = efi_copyin;
+	archsw.arch_copyout = efi_copyout;
+	archsw.arch_readin = efi_readin;
 
 	interact(NULL);			/* doesn't return */
 
@@ -387,3 +387,22 @@ command_nvram(int argc, char *argv[])
 
 	return (CMD_OK);
 }
+
+#ifdef LOADER_FDT_SUPPORT
+extern int command_fdt_internal(int argc, char *argv[]);
+
+/*
+ * Since proper fdt command handling function is defined in fdt_loader_cmd.c,
+ * and declaring it as extern is in contradiction with COMMAND_SET() macro
+ * (which uses static pointer), we're defining wrapper function, which
+ * calls the proper fdt handling routine.
+ */
+static int
+command_fdt(int argc, char *argv[])
+{
+
+	return (command_fdt_internal(argc, argv));
+}
+
+COMMAND_SET(fdt, "fdt", "flattened device tree handling", command_fdt);
+#endif

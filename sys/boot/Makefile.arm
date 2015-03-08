@@ -1,5 +1,6 @@
 # $FreeBSD$
 
+SUBDIR+=		efi
 .if ${MK_FDT} != "no"
 SUBDIR+=		fdt
 .endif
