@@ -116,6 +116,7 @@ TUNABLE_INT("hw.awg.tx_interval", &awg_tx_interval);
 
 static struct ofw_compat_data compat_data[] = {
 	{ "allwinner,sun8i-a83t-emac",		1 },
+	{ "allwinner,sun8i-h3-emac",		1 },
 	{ NULL,					0 }
 };
 
