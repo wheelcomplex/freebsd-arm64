@@ -1,4 +1,5 @@
 # $FreeBSD$
+arm/allwinner/a10_mmc.c		optional	mmc
 arm/arm/generic_timer.c		standard
 arm/arm/gic.c			optional	intrng
 arm/arm/pmu.c			standard
