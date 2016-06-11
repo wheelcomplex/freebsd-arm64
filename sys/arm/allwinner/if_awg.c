@@ -1028,8 +1028,8 @@ awg_setup_extres(device_t dev)
 	}
 
 	if (bootverbose)
-		device_printf(dev, "AHB frequency %llu Hz, MDC div: 0x%x\n",
-		    freq, sc->mdc_div_ratio_m);
+		device_printf(dev, "AHB frequency %ju Hz, MDC div: 0x%x\n",
+		    (uintmax_t)freq, sc->mdc_div_ratio_m);
 
 	return (0);
 
